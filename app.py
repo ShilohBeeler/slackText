@@ -3,6 +3,7 @@ import os
 import time
 import re
 import threading
+import json
 from slackclient import SlackClient
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
@@ -35,7 +36,6 @@ def twilio_post():
 
 def slack_main():
     while True:
-        print()
         command, channel = parse_bot_commands(slack_client.rtm_read())
         if command:
             handle_command(command, channel)
@@ -63,11 +63,33 @@ def handle_command(command, channel):
     if(command.startswith("passthrough")):
         twilio_client.messages.create(to=USER_NUMBER, from_=TWILIO_NUMBER, body=command[12:])
         return
+    if(command.startswith("monitor")):
+        with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r+") as f:
+            monitor_json = json.load(f)
+            if not channel in monitor_json[0]:
+                monitor_json[0][channel] = []
+            if not command[8:] in monitor_json[0][channel]:
+                monitor_json[0][channel].append(command[8:])
+                response = "Your number " + command[8:] + " has been added to this channel's monitoring list!"
+            else:
+                response = "Your number was already on the list."
+            f.seek(0)
+            f.write(json.dumps(monitor_json))
+            f.close()
+
 
     slack_client.api_call("chat.postMessage", channel=channel, text=response or default_response)
 
 
 if __name__ == '__main__':
+    if not os.path.exists(os.path.expanduser("~") + "/slackText"):
+        os.mkdir(os.path.expanduser("~") + "/slackText")
+    if not os.path.isfile(os.path.expanduser("~") + "/slackText/numbers_channels.json"):
+        with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "w") as f:
+            channels = {}
+            initjson = [channels]
+            f.write(json.dumps(initjson))
+            f.close()
     if slack_client.rtm_connect(with_team_state=False):
         print("Bot running!")
         starterbot_id = slack_client.api_call("auth.test")["user_id"]
