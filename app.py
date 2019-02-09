@@ -60,6 +60,9 @@ def handle_command(command, channel):
 
     if(command.startswith(EXAMPLE_COMMAND)):
         response = "Nice."
+    if(command.startswith("passthrough")):
+        twilio_client.messages.create(to=USER_NUMBER, from_=TWILIO_NUMBER, body=command[12:])
+        return
 
     slack_client.api_call("chat.postMessage", channel=channel, text=response or default_response)
 
