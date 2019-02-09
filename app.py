@@ -89,6 +89,24 @@ def handle_command(command, channel):
             f.seek(0)
             f.write(json.dumps(monitor_json))
             f.close()
+    if (command.startswith("demonitor")):
+        with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r+") as f:
+            monitor_json = json.load(f)
+            if not channel in monitor_json[0]:
+                monitor_json[0][channel] = []
+            phone_number = command[10:]
+            if not phone_number in monitor_json[1]:
+                monitor_json[1][phone_number] = {"last_channel": "#general", "channels": []}
+            if phone_number in monitor_json[0][channel]:
+                monitor_json[0][channel].remove(phone_number)
+                monitor_json[1][phone_number]["channels"].remove(channel)
+                response = "Your number " + phone_number + " has been removed from this channel's monitoring list!"
+            else:
+                response = "Your number wasn't on the list."
+            f.seek(0)
+            f.write(json.dumps(monitor_json))
+            f.truncate()
+            f.close()
 
 
     slack_client.api_call("chat.postMessage", channel=channel, text=response or default_response)
@@ -96,7 +114,7 @@ def handle_command(command, channel):
 def monitor_event(message, channel, user):
     with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r+") as f:
         monitor_json = json.load(f)
-        if channel in monitor_json[0]:
+        if channel in monitor_json[0] and len(monitor_json[0][channel]) != 0:
             username = slack_client.api_call("users.info", user=user)["user"]["profile"]["display_name"]
             channel_name = slack_client.api_call("channels.info", channel=channel)["channel"]["name"]
             response = username + " in channel " + channel_name + " said: " + message
@@ -126,5 +144,3 @@ if __name__ == '__main__':
     else:
         print("Connection failed.")
     app.run()
-
-
