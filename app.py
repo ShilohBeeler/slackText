@@ -47,11 +47,13 @@ def parse_bot_commands(slack_events):
             user_id, message = parse_direct_mention(event["text"])
             if user_id == starterbot_id:
                 return message, event["channel"]
+            else:
+                monitor_event(message, event["channel"], event["user"])
     return None, None
 
 def parse_direct_mention(message_text):
     matches = re.search(MENTION_REGEX, message_text)
-    return (matches.group(1), matches.group(2).strip()) if matches else (None, None)
+    return (matches.group(1), matches.group(2).strip()) if matches else (None, message_text)
 
 def handle_command(command, channel):
     default_response = "Not sure what you mean."
@@ -79,6 +81,16 @@ def handle_command(command, channel):
 
 
     slack_client.api_call("chat.postMessage", channel=channel, text=response or default_response)
+
+def monitor_event(message, channel, user):
+    with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r") as f:
+        monitor_json = json.load(f)
+        if channel in monitor_json[0]:
+            username = slack_client.api_call("users.info", user=user)["user"]["profile"]["display_name"]
+            channel_name = slack_client.api_call("channels.info", channel=channel)["channel"]["name"]
+            response = username + " in channel " + channel_name + " said: " + message
+            for phone_number in monitor_json[0][channel]:
+                twilio_client.messages.create(to=phone_number, from_=TWILIO_NUMBER, body=response)
 
 
 if __name__ == '__main__':
