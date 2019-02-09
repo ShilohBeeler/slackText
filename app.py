@@ -73,6 +73,5 @@ if __name__ == '__main__':
     else:
         print("Connection failed.")
     app.run()
-    #threading.Thread
 
 
