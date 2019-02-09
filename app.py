@@ -29,9 +29,16 @@ def hello_world():
 @app.route('/twilio', methods=['POST'])
 def twilio_post():
     response = MessagingResponse()
-    if request.form['From'] == USER_NUMBER:
-        message = request.form['Body']
-        slack_client.api_call("chat.postMessage", channel="#general", text=message, username='textBot')
+    with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r") as f:
+        monitor_json = json.load(f)
+        if request.form['From'] in monitor_json[1]:
+            last_channel = monitor_json[1][request.form['From']]["last_channel"]
+            message = request.form['Body']
+            slack_client.api_call("chat.postMessage", channel=last_channel, text=message, username=request.form['From'])
+        else:
+            message = request.form['Body']
+            slack_client.api_call("chat.postMessage", channel="#general", text=message, username=request.form['From'])
+        f.close()
         return Response(response.toxml(), mimetype="text/xml"), 200
 
 def slack_main():
@@ -70,9 +77,13 @@ def handle_command(command, channel):
             monitor_json = json.load(f)
             if not channel in monitor_json[0]:
                 monitor_json[0][channel] = []
-            if not command[8:] in monitor_json[0][channel]:
-                monitor_json[0][channel].append(command[8:])
-                response = "Your number " + command[8:] + " has been added to this channel's monitoring list!"
+            phone_number = command[8:]
+            if not phone_number in monitor_json[1]:
+                monitor_json[1][phone_number] = {"last_channel": "#general", "channels": []}
+            if not phone_number in monitor_json[0][channel]:
+                monitor_json[0][channel].append(phone_number)
+                monitor_json[1][phone_number]["channels"].append(channel)
+                response = "Your number " + phone_number + " has been added to this channel's monitoring list!"
             else:
                 response = "Your number was already on the list."
             f.seek(0)
@@ -83,7 +94,7 @@ def handle_command(command, channel):
     slack_client.api_call("chat.postMessage", channel=channel, text=response or default_response)
 
 def monitor_event(message, channel, user):
-    with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r") as f:
+    with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r+") as f:
         monitor_json = json.load(f)
         if channel in monitor_json[0]:
             username = slack_client.api_call("users.info", user=user)["user"]["profile"]["display_name"]
@@ -91,6 +102,10 @@ def monitor_event(message, channel, user):
             response = username + " in channel " + channel_name + " said: " + message
             for phone_number in monitor_json[0][channel]:
                 twilio_client.messages.create(to=phone_number, from_=TWILIO_NUMBER, body=response)
+                monitor_json[1][phone_number]["last_channel"] = channel
+        f.seek(0)
+        f.write(json.dumps(monitor_json))
+        f.close()
 
 
 if __name__ == '__main__':
@@ -99,7 +114,8 @@ if __name__ == '__main__':
     if not os.path.isfile(os.path.expanduser("~") + "/slackText/numbers_channels.json"):
         with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "w") as f:
             channels = {}
-            initjson = [channels]
+            numbers = {}
+            initjson = [channels, numbers]
             f.write(json.dumps(initjson))
             f.close()
     if slack_client.rtm_connect(with_team_state=False):
