@@ -17,6 +17,7 @@ starterbot_id = None
 RTM_READ_DELAY = 1
 EXAMPLE_COMMAND = "do"
 MENTION_REGEX = "^<@(|[WU].+?)>(.*)"
+REPLACE_MENTION_REGEX = r"^<@(|[WU].+?)>"
 
 app = Flask(__name__)
 
@@ -141,6 +142,7 @@ def twilio_commands(message, sender):
                     monitor_json[1][sender]["alias"]
             else:
                 username = sender
+            f.close()
         slack_client.api_call("chat.postMessage", channel=channel, text=send_message, username=username)
         twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body="Message sent to #" + channel + "!")
 
@@ -159,6 +161,16 @@ def parse_bot_commands(slack_events):
 def parse_direct_mention(message_text):
     matches = re.search(MENTION_REGEX, message_text)
     return (matches.group(1), matches.group(2).strip()) if matches else (None, message_text)
+
+def mention_to_text(message_text):
+    def make_text(mention):
+        mention_ = mention.group(1)
+        username = slack_client.api_call("users.info", user=mention_)["user"]["profile"]["display_name"]
+        output = "@" + username + ""
+        return output
+    message_text = re.sub(r"^<@(|[WU].+?)>", make_text, message_text)
+    return message_text
+
 
 
 def handle_command(command, channel):
@@ -228,7 +240,7 @@ def monitor_event(message, channel, user):
         if channel in monitor_json[0] and len(monitor_json[0][channel]) != 0:
             username = slack_client.api_call("users.info", user=user)["user"]["profile"]["display_name"]
             channel_name = slack_client.api_call("channels.info", channel=channel)["channel"]["name"]
-            response = username + " in channel " + channel_name + " said: " + message
+            response = username + " in channel " + channel_name + " said: " + mention_to_text(message)
             for phone_number in monitor_json[0][channel]:
                 twilio_client.messages.create(to=phone_number, from_=TWILIO_NUMBER, body=response)
                 monitor_json[1][phone_number]["last_channel"] = channel
