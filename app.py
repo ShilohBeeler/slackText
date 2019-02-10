@@ -44,7 +44,7 @@ def twilio_post():
     elif sender in monitor_json[1]:
         last_channel = monitor_json[1][sender]["last_channel"]
         username = sender if monitor_json[1][sender]["alias"] == "None" else \
-        monitor_json[1][sender]["alias"]
+            monitor_json[1][sender]["alias"]
         slack_client.api_call("chat.postMessage", channel=last_channel, text=message, username=username)
     else:
         slack_client.api_call("chat.postMessage", channel="#general", text=message, username=request.form['From'])
@@ -57,6 +57,7 @@ def slack_main():
         if command:
             handle_command(command, channel)
         time.sleep(RTM_READ_DELAY)
+
 
 def twilio_commands(message, sender):
     split = message.split()
@@ -93,7 +94,7 @@ def twilio_commands(message, sender):
             f.seek(0)
             f.write(json.dumps(monitor_json))
             f.close()
-        twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body = response)
+        twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body=response)
     elif split[1] == "demonitor":
         channel = split[2]
         for chan in channel_data:
@@ -116,7 +117,7 @@ def twilio_commands(message, sender):
             f.write(json.dumps(monitor_json))
             f.truncate()
             f.close()
-        twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body = response)
+        twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body=response)
     elif split[1] == "alias":
         with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r+") as f:
             monitor_json = json.load(f)
@@ -129,9 +130,20 @@ def twilio_commands(message, sender):
             f.write(json.dumps(monitor_json))
             f.truncate()
             f.close()
-        twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body = response)
+        twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body=response)
     elif split[1] == "direct":
-        print("yeet")
+        channel = split[2]
+        send_message = " ".join(split[2:])
+        with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r") as f:
+            monitor_json = json.load(f)
+            if sender in monitor_json[1]:
+                username = sender if monitor_json[1][sender]["alias"] == "None" else \
+                    monitor_json[1][sender]["alias"]
+            else:
+                username = sender
+        slack_client.api_call("chat.postMessage", channel=channel, text=send_message, username=username)
+        twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body="Message sent to #" + channel + "!")
+
 
 def parse_bot_commands(slack_events):
     for event in slack_events:
