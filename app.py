@@ -118,7 +118,18 @@ def twilio_commands(message, sender):
             f.close()
         twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body = response)
     elif split[1] == "alias":
-        print("yeet")
+        with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r+") as f:
+            monitor_json = json.load(f)
+            phone_number = sender
+            if not phone_number in monitor_json[1]:
+                monitor_json[1][phone_number] = {"alias": "None", "last_channel": "#general", "channels": []}
+            monitor_json[1][phone_number]["alias"] = split[2]
+            response = "The alias for " + phone_number + " has been set to: " + split[2]
+            f.seek(0)
+            f.write(json.dumps(monitor_json))
+            f.truncate()
+            f.close()
+        twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body = response)
     elif split[1] == "direct":
         print("yeet")
 
