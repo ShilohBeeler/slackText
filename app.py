@@ -46,9 +46,9 @@ def twilio_post():
         last_channel = monitor_json[1][sender]["last_channel"]
         username = sender if monitor_json[1][sender]["alias"] == "None" else \
             monitor_json[1][sender]["alias"]
-        slack_client.api_call("chat.postMessage", channel=last_channel, text=message, username=username)
+        slack_client.api_call("chat.postMessage", channel=last_channel, text=text_to_mention(message), username=username, link_names=True)
     else:
-        slack_client.api_call("chat.postMessage", channel="#general", text=message, username=request.form['From'])
+        slack_client.api_call("chat.postMessage", channel="#general", text=text_to_mention(message), username=request.form['From'], link_names=True)
     return Response(response.toxml(), mimetype="text/xml"), 200
 
 
@@ -143,7 +143,7 @@ def twilio_commands(message, sender):
             else:
                 username = sender
             f.close()
-        slack_client.api_call("chat.postMessage", channel=channel, text=send_message, username=username)
+        slack_client.api_call("chat.postMessage", channel=channel, text=send_message, username=username, link_names=True)
         twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body="Message sent to #" + channel + "!")
 
 
@@ -171,7 +171,20 @@ def mention_to_text(message_text):
     message_text = re.sub(r"^<@(|[WU].+?)>", make_text, message_text)
     return message_text
 
-
+def text_to_mention(message_text):
+    print("in")
+    def make_mention(name):
+        user_data = slack_client.api_call("users.list")["members"]
+        name = name.group(1)
+        print(name)
+        user_id = ""
+        for user in user_data:
+            if user["profile"]["display_name"] == name:
+                user_id = user["id"]
+        output = "<@" + user_id + ">"
+        return output
+    message_text = re.sub(r"^@(\w+)", make_mention, message_text)
+    return message_text
 
 def handle_command(command, channel):
     default_response = "Not sure what you mean."
