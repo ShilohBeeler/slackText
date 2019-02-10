@@ -136,7 +136,7 @@ def twilio_commands(message, sender):
         twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body=response)
     elif split[1] == "direct":
         channel = split[2]
-        send_message = " ".join(split[2:])
+        send_message = " ".join(split[3:])
         with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r") as f:
             monitor_json = json.load(f)
             if sender in monitor_json[1]:
@@ -170,7 +170,8 @@ def mention_to_text(message_text):
     def make_text(mention):
         mention_ = mention.group(1)
         print(mention_)
-        username = slack_client.api_call("users.info", user=mention_)["user"]["profile"]["display_name"]
+        username = slack_client.api_call("users.info", user=mention_)["user"]["profile"]["display_name"] or \
+                   slack_client.api_call("users.info", user=mention_)["user"]["name"]
         output = "@" + username + ""
         return output
 
