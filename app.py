@@ -29,19 +29,26 @@ def hello_world():
 @app.route('/twilio', methods=['POST'])
 def twilio_post():
     response = MessagingResponse()
-    with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r") as f:
+    message = request.form['Body']
+    sender = request.form['From']
+    with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r+") as f:
         monitor_json = json.load(f)
-        if request.form['From'] in monitor_json[1]:
-            last_channel = monitor_json[1][request.form['From']]["last_channel"]
-            username = request.form['From'] if monitor_json[1][request.form['From']]["alias"] == "None" else \
-            monitor_json[1][request.form['From']]["alias"]
-            message = request.form['Body']
-            slack_client.api_call("chat.postMessage", channel=last_channel, text=message, username=username)
-        else:
-            message = request.form['Body']
-            slack_client.api_call("chat.postMessage", channel="#general", text=message, username=request.form['From'])
+        if not sender in monitor_json[1]:
+            monitor_json[1][sender] = {"alias": "None", "last_channel": "#general", "channels": []}
+        f.seek(0)
+        f.write(json.dumps(monitor_json))
+        f.truncate()
         f.close()
-        return Response(response.toxml(), mimetype="text/xml"), 200
+    if message.startswith("command"):
+        twilio_commands(message, sender)
+    elif sender in monitor_json[1]:
+        last_channel = monitor_json[1][sender]["last_channel"]
+        username = sender if monitor_json[1][sender]["alias"] == "None" else \
+        monitor_json[1][sender]["alias"]
+        slack_client.api_call("chat.postMessage", channel=last_channel, text=message, username=username)
+    else:
+        slack_client.api_call("chat.postMessage", channel="#general", text=message, username=request.form['From'])
+    return Response(response.toxml(), mimetype="text/xml"), 200
 
 
 def slack_main():
@@ -51,6 +58,69 @@ def slack_main():
             handle_command(command, channel)
         time.sleep(RTM_READ_DELAY)
 
+def twilio_commands(message, sender):
+    split = message.split()
+    channel_data = slack_client.api_call("channels.list")["channels"]
+    if split[1] == "list":
+        channel_list = ""
+        with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r") as f:
+            monitor_json = json.load(f)
+            for chan in channel_data:
+                channel_list += chan["name"]
+                if chan["id"] in monitor_json[1][sender]["channels"]:
+                    channel_list += " (Monitored)"
+                channel_list += "\n"
+            twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body="Channels:\n" + channel_list)
+            f.close()
+    elif split[1] == "monitor":
+        channel = split[2]
+        for chan in channel_data:
+            if chan["name"] == channel:
+                channel = chan["id"]
+        with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r+") as f:
+            monitor_json = json.load(f)
+            if not channel in monitor_json[0]:
+                monitor_json[0][channel] = []
+            phone_number = sender
+            if not phone_number in monitor_json[1]:
+                monitor_json[1][phone_number] = {"alias": "None", "last_channel": "#general", "channels": []}
+            if not phone_number in monitor_json[0][channel]:
+                monitor_json[0][channel].append(phone_number)
+                monitor_json[1][phone_number]["channels"].append(channel)
+                response = "Your number " + phone_number + " has been added to this channel's monitoring list!"
+            else:
+                response = "Your number was already on the list."
+            f.seek(0)
+            f.write(json.dumps(monitor_json))
+            f.close()
+        twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body = response)
+    elif split[1] == "demonitor":
+        channel = split[2]
+        for chan in channel_data:
+            if chan["name"] == channel:
+                channel = chan["id"]
+        with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r+") as f:
+            monitor_json = json.load(f)
+            if not channel in monitor_json[0]:
+                monitor_json[0][channel] = []
+            phone_number = sender
+            if not phone_number in monitor_json[1]:
+                monitor_json[1][phone_number] = {"alias": "None", "last_channel": "#general", "channels": []}
+            if phone_number in monitor_json[0][channel]:
+                monitor_json[0][channel].remove(phone_number)
+                monitor_json[1][phone_number]["channels"].remove(channel)
+                response = "Your number " + phone_number + " has been removed from this channel's monitoring list!"
+            else:
+                response = "Your number wasn't on the list."
+            f.seek(0)
+            f.write(json.dumps(monitor_json))
+            f.truncate()
+            f.close()
+        twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body = response)
+    elif split[1] == "alias":
+        print("yeet")
+    elif split[1] == "direct":
+        print("yeet")
 
 def parse_bot_commands(slack_events):
     for event in slack_events:
