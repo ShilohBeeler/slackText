@@ -40,7 +40,7 @@ def twilio_post():
         f.write(json.dumps(monitor_json))
         f.truncate()
         f.close()
-    if message.startswith("command"):
+    if message.lower().startswith("command"):
         twilio_commands(message, sender)
     elif sender in monitor_json[1]:
         last_channel = monitor_json[1][sender]["last_channel"]
@@ -65,7 +65,7 @@ def slack_main():
 def twilio_commands(message, sender):
     split = message.split()
     channel_data = slack_client.api_call("channels.list")["channels"]
-    if split[1] == "list":
+    if split[1].lower() == "list":
         channel_list = ""
         with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r") as f:
             monitor_json = json.load(f)
@@ -76,7 +76,7 @@ def twilio_commands(message, sender):
                 channel_list += "\n"
             twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body="Channels:\n" + channel_list)
             f.close()
-    elif split[1] == "monitor":
+    elif split[1].lower() == "monitor":
         channel = split[2]
         for chan in channel_data:
             if chan["name"] == channel:
@@ -98,7 +98,7 @@ def twilio_commands(message, sender):
             f.write(json.dumps(monitor_json))
             f.close()
         twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body=response)
-    elif split[1] == "demonitor":
+    elif split[1].lower() == "demonitor":
         channel = split[2]
         for chan in channel_data:
             if chan["name"] == channel:
@@ -121,7 +121,7 @@ def twilio_commands(message, sender):
             f.truncate()
             f.close()
         twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body=response)
-    elif split[1] == "alias":
+    elif split[1].lower() == "alias":
         with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r+") as f:
             monitor_json = json.load(f)
             phone_number = sender
@@ -134,7 +134,7 @@ def twilio_commands(message, sender):
             f.truncate()
             f.close()
         twilio_client.messages.create(to=sender, from_=TWILIO_NUMBER, body=response)
-    elif split[1] == "direct":
+    elif split[1].lower() == "direct":
         channel = split[2]
         send_message = " ".join(split[3:])
         with open(os.path.expanduser("~") + "/slackText/numbers_channels.json", "r") as f:
